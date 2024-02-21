@@ -1,11 +1,12 @@
 import React, { Component } from 'react';
-import axios from 'axios';
+
 import { Searchbar } from './Searchbar/Searchbar';
 import { ImageGallery } from './ImageGallery/ImageGallery';
 import { Button } from './Button/Button';
 import { Loader } from './Loader/Loader';
 import { Modal } from './Modal/Modal';
 import styles from './App.module.css';
+import { getImages } from './serviseApi/serviceApi';
 
 export class App extends Component {
   state = {
@@ -15,25 +16,24 @@ export class App extends Component {
     modalOpen: false,
     selectedImage: '',
     query: '',
-    hasMore: true,
+    showBtn: false,
   };
 
   handleSearch = (query) => {
-    this.setState({ images: [], page: 1, query, hasMore: true });
-    this.searchImages(query);
+    this.setState({ images: [], page: 1, query, });
+    // this.searchImages();
   };
 
-  searchImages = async (query) => {
+  searchImages = async () => {
     this.setState({ loading: true });
 
     try {
-      const response = await axios.get(
-        `https://pixabay.com/api/?q=${query}&page=${this.state.page}&key=40911756-f65b6d1dd8fe00ae3d3aa7e29&image_type=photo&orientation=horizontal&per_page=12`
-      );
+      const response = await getImages(this.state.query, this.state.page);
+      // console.log(response);
 
       this.setState((prevState) => ({
-        images: [...prevState.images, ...response.data.hits],
-        hasMore: response.data.hits.length > 0,
+        images: [...prevState.images, ...response.hits],
+        showBtn: this.state.page < Math.ceil(response.totalHits / 12),
       }));
     } catch (error) {
       console.error('Error fetching images:', error);
@@ -43,9 +43,7 @@ export class App extends Component {
   };
 
   loadMoreImages = () => {
-    this.setState((prevState) => ({ page: prevState.page + 1 }), () => {
-      this.searchImages(this.state.query);
-    });
+    this.setState((prevState) => ({ page: prevState.page + 1 }));
   };
 
   openModal = (imageUrl) => {
@@ -58,37 +56,32 @@ export class App extends Component {
     document.body.style.overflow = '';
   };
 
-  handleOverlayClick = (e) => {
-    if (e.target === e.currentTarget) {
-      this.closeModal();
+
+  componentDidUpdate(prevProps, prevState) {
+    const { query, page } = this.state;
+    if (prevState.query !== query || prevState.page !== page) {
+      try {
+        this.setState({ loading: true });
+        this.searchImages()
+      } catch (error) {
+
+      }
+  
     }
-  };
+  }
 
-  handleKeyUp = (e) => {
-    if (e.key === 'Escape') {
-      this.closeModal();
+    render() {
+      const { images, loading, modalOpen, selectedImage, showBtn } = this.state;
+
+      return (
+        <div className={styles.App}>
+          <Searchbar onSubmit={this.handleSearch} />
+          <ImageGallery images={images} openModal={this.openModal} />
+          {loading && <Loader />}
+          {showBtn && <Button onLoadMore={this.loadMoreImages} hasMore={!loading} />}
+          <Modal isOpen={modalOpen} closeModal={this.closeModal} imageUrl={selectedImage} onOverlayClick={this.handleOverlayClick} />
+        </div>
+      )
     }
-  };
-
-  componentDidMount() {
-    window.addEventListener('keyup', this.handleKeyUp);
   }
 
-  componentWillUnmount() {
-    window.removeEventListener('keyup', this.handleKeyUp);
-  }
-
-  render() {
-    const { images, loading, modalOpen, selectedImage, hasMore } = this.state;
-
-    return (
-      <div className={styles.App}>
-        <Searchbar onSubmit={this.handleSearch} />
-        <ImageGallery images={images} openModal={this.openModal} />
-        {loading && <Loader />}
-        {images.length > 0 && hasMore && <Button onLoadMore={this.loadMoreImages} hasMore={!loading} />}
-        <Modal isOpen={modalOpen} closeModal={this.closeModal} imageUrl={selectedImage} onOverlayClick={this.handleOverlayClick} />
-      </div>
-    );
-  }
-}
